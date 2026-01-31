@@ -1,14 +1,10 @@
-/**
- * OpenCode storage data loader - works with both Bun and Node.js
- */
-
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readdir, stat, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { MessageJson } from "./types.js";
 
-// Runtime detection
 const isBun = typeof globalThis.Bun !== "undefined";
+const BATCH_SIZE = 10000;
 
 export function getOpenCodeStoragePath(): string {
   const xdgDataHome =
@@ -16,14 +12,30 @@ export function getOpenCodeStoragePath(): string {
   return join(xdgDataHome, "opencode", "storage");
 }
 
-const BATCH_SIZE = 500;
-
 async function readJsonFile(filePath: string): Promise<MessageJson> {
-  if (isBun) {
-    return Bun.file(filePath).json() as Promise<MessageJson>;
-  }
-  const content = readFileSync(filePath, "utf-8");
+  const content = isBun
+    ? await Bun.file(filePath).text()
+    : await readFile(filePath, "utf-8");
   return JSON.parse(content) as MessageJson;
+}
+
+async function collectFilePaths(messagesDir: string): Promise<string[]> {
+  const sessionDirs = await readdir(messagesDir);
+
+  const pathArrays = await Promise.all(
+    sessionDirs.map(async (sessionDir) => {
+      const sessionPath = join(messagesDir, sessionDir);
+      const st = await stat(sessionPath);
+      if (!st.isDirectory()) return [];
+
+      const files = await readdir(sessionPath);
+      return files
+        .filter((f) => f.endsWith(".json"))
+        .map((f) => join(sessionPath, f));
+    })
+  );
+
+  return pathArrays.flat();
 }
 
 async function processInBatches<T, R>(
@@ -47,23 +59,7 @@ export async function loadMessages(
   const messagesDir = join(storagePath, "message");
 
   try {
-    const sessionDirs = readdirSync(messagesDir);
-
-    const filePaths: string[] = [];
-    for (const sessionDir of sessionDirs) {
-      const sessionPath = join(messagesDir, sessionDir);
-      const stat = statSync(sessionPath);
-
-      if (!stat.isDirectory()) continue;
-
-      const messageFiles = readdirSync(sessionPath).filter((f) =>
-        f.endsWith(".json")
-      );
-
-      for (const messageFile of messageFiles) {
-        filePaths.push(join(sessionPath, messageFile));
-      }
-    }
+    const filePaths = await collectFilePaths(messagesDir);
 
     const results = await processInBatches(
       filePaths,
