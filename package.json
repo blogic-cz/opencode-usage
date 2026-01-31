@@ -1,6 +1,6 @@
 {
   "name": "opencode-usage",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "CLI tool for tracking OpenCode AI coding assistant usage and costs",
   "keywords": [
     "ai",
@@ -43,7 +43,8 @@
     }
   },
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir ./dist --target node --format esm --sourcemap && bun run build:types",
+    "build": "bun build ./src/index.ts --outdir ./dist --target bun --format esm --sourcemap && bun run build:shebang && bun run build:types",
+    "build:shebang": "bun -e \"const f='dist/index.js';Bun.write(f,(await Bun.file(f).text()).replace('#!/usr/bin/env node','#!/usr/bin/env bun'))\"",
     "build:types": "tsc --emitDeclarationOnly --declaration --outDir dist",
     "check": "bun check.ts",
     "check:ci": "bun check.ts ci",
