@@ -29,11 +29,11 @@ export async function loadMessages(
   providerFilter?: string
 ): Promise<MessageJson[]> {
   const messagesDir = join(storagePath, "message");
-  const messages: MessageJson[] = [];
 
   try {
     const sessionDirs = readdirSync(messagesDir);
 
+    const filePaths: string[] = [];
     for (const sessionDir of sessionDirs) {
       const sessionPath = join(messagesDir, sessionDir);
       const stat = statSync(sessionPath);
@@ -45,29 +45,34 @@ export async function loadMessages(
       );
 
       for (const messageFile of messageFiles) {
-        try {
-          const messagePath = join(sessionPath, messageFile);
-          const msg = await readJsonFile(messagePath);
-
-          if (msg.role === "user") continue;
-          if (!msg.tokens) continue;
-
-          const providerId =
-            msg.model?.providerID ?? msg.providerID ?? "unknown";
-
-          if (providerFilter && providerId.toLowerCase() !== providerFilter) {
-            continue;
-          }
-
-          messages.push(msg);
-        } catch {
-          // Skip invalid JSON files
-        }
+        filePaths.push(join(sessionPath, messageFile));
       }
     }
+
+    const results = await Promise.all(
+      filePaths.map(async (filePath) => {
+        try {
+          return await readJsonFile(filePath);
+        } catch {
+          return null; // Skip invalid JSON files
+        }
+      })
+    );
+
+    return results.filter((msg): msg is MessageJson => {
+      if (!msg) return false;
+      if (msg.role === "user") return false;
+      if (!msg.tokens) return false;
+
+      if (providerFilter) {
+        const providerId = msg.model?.providerID ?? msg.providerID ?? "unknown";
+        if (providerId.toLowerCase() !== providerFilter) return false;
+      }
+
+      return true;
+    });
   } catch (err) {
     console.error(`Error reading messages directory: ${err}`);
+    return [];
   }
-
-  return messages;
 }
