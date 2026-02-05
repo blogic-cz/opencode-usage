@@ -7,6 +7,7 @@ CLI tool for tracking [OpenCode](https://github.com/sst/opencode) AI coding assi
 - Daily or monthly usage breakdown with token counts and estimated costs
 - Provider breakdown (Anthropic, OpenAI, Google, etc.)
 - Filter by provider, date range, or relative time
+- Watch mode for live monitoring
 - JSON output for scripting and automation
 - Model pricing for accurate cost estimation
 - Terminal table output
@@ -53,6 +54,10 @@ opencode-usage -m --since 2025-01-01
 # JSON output (for scripting)
 opencode-usage --json
 opencode-usage --monthly --json > usage.json
+
+# Watch mode (live refresh every 5s)
+opencode-usage --watch
+opencode-usage -w -d 1
 
 # Combine filters
 opencode-usage --provider anthropic --since 7d --json
