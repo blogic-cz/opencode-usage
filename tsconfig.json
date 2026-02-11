@@ -9,8 +9,16 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "declaration": true,
-    "types": ["bun-types"]
+    "types": [
+      "bun-types"
+    ]
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "opensrc"
+  ]
 }

@@ -59,3 +59,81 @@ export type ModelPricing = {
   cacheWrite: number;
   cacheRead: number;
 };
+
+// ============================================================================
+// Quota Types (for dashboard multi-source view)
+// ============================================================================
+
+/** Unified quota snapshot for display */
+export type QuotaSnapshot = {
+  source: "anthropic" | "antigravity" | "codex";
+  label: string;
+  used: number; // 0-1 (percentage used)
+  resetAt?: number; // Unix timestamp
+  error?: string; // Error message if unavailable
+};
+
+/** Cursor state for incremental message loading */
+export type CursorState = {
+  knownSessions: Set<string>;
+  fileCountPerSession: Map<string, number>;
+  lastTimestamp: number;
+};
+
+/** Anthropic multi-account state file structure */
+export type MultiAccountState = {
+  currentAccount?: string;
+  usage?: Record<
+    string,
+    {
+      session5h?: { utilization: number; reset: number };
+      weekly7d?: { utilization: number; reset: number };
+      weekly7dSonnet?: { utilization: number; reset: number };
+    }
+  >;
+};
+
+/** Antigravity quota group */
+export type AntigravityQuotaGroup = {
+  remainingFraction: number; // 0-1 (remaining, needs inversion for "used")
+  resetTime?: string; // ISO date string
+};
+
+/** Antigravity accounts file structure */
+export type AntigravityAccount = {
+  email?: string;
+  disabled?: boolean;
+  cachedQuota?: {
+    claude?: AntigravityQuotaGroup;
+    "gemini-pro"?: AntigravityQuotaGroup;
+    "gemini-flash"?: AntigravityQuotaGroup;
+  };
+  cachedQuotaUpdatedAt?: number;
+};
+
+export type AntigravityAccountsFile = {
+  accounts: AntigravityAccount[];
+};
+
+/** Codex API response structure */
+export type CodexUsageResponse = {
+  user_id?: string;
+  account_id?: string;
+  plan_type?: string;
+  rate_limit?: {
+    primary_window?: {
+      used_percent: number;
+      reset_at: number;
+    };
+    secondary_window?: {
+      used_percent: number;
+      reset_at: number;
+    };
+  };
+  code_review_rate_limit?: {
+    primary_window?: {
+      used_percent: number;
+      reset_at: number;
+    };
+  };
+};

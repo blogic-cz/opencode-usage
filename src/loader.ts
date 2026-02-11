@@ -1,7 +1,7 @@
 import { readdir, stat, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { MessageJson } from "./types.js";
+import type { MessageJson, CursorState } from "./types.js";
 
 const isBun = typeof globalThis.Bun !== "undefined";
 const BATCH_SIZE = 10000;
@@ -89,4 +89,99 @@ export async function loadMessages(
     console.error(`Error reading messages directory: ${err}`);
     return [];
   }
+}
+
+/**
+ * Create an empty cursor state for first load
+ */
+export function createCursor(): CursorState {
+  return {
+    knownSessions: new Set(),
+    fileCountPerSession: new Map(),
+    lastTimestamp: 0,
+  };
+}
+
+/**
+ * Load messages incrementally using cursor state
+ * Returns new messages and updated cursor
+ */
+export async function loadMessagesIncremental(
+  storagePath: string,
+  cursor: CursorState,
+  providerFilter?: string
+): Promise<{ messages: MessageJson[]; cursor: CursorState }> {
+  const messagesDir = join(storagePath, "message");
+  const newMessages: MessageJson[] = [];
+  const newCursor: CursorState = {
+    knownSessions: new Set(cursor.knownSessions),
+    fileCountPerSession: new Map(cursor.fileCountPerSession),
+    lastTimestamp: cursor.lastTimestamp,
+  };
+
+  try {
+    const sessionDirs = await readdir(messagesDir);
+
+    for (const sessionDir of sessionDirs) {
+      const sessionPath = join(messagesDir, sessionDir);
+      const st = await stat(sessionPath);
+      if (!st.isDirectory()) continue;
+
+      const files = await readdir(sessionPath);
+      const jsonFiles = files.filter((f) => f.endsWith(".json"));
+      const previousCount = cursor.fileCountPerSession.get(sessionDir) ?? 0;
+
+      // Only read new files
+      if (jsonFiles.length > previousCount) {
+        // Sort files to get consistent ordering (by name = by time usually)
+        const sortedFiles = jsonFiles.sort();
+        const newFiles = sortedFiles.slice(previousCount);
+
+        for (const file of newFiles) {
+          const filePath = join(sessionPath, file);
+          try {
+            const msg = await readJsonFile(filePath);
+            if (isValidMessage(msg, providerFilter)) {
+              newMessages.push(msg);
+              if (
+                msg.time?.created &&
+                msg.time.created > newCursor.lastTimestamp
+              ) {
+                newCursor.lastTimestamp = msg.time.created;
+              }
+            }
+          } catch {
+            // Skip invalid files
+          }
+        }
+      }
+
+      newCursor.knownSessions.add(sessionDir);
+      newCursor.fileCountPerSession.set(sessionDir, jsonFiles.length);
+    }
+
+    return { messages: newMessages, cursor: newCursor };
+  } catch (err) {
+    console.error(`Error in incremental load: ${err}`);
+    return { messages: [], cursor: newCursor };
+  }
+}
+
+/**
+ * Helper to validate message
+ */
+function isValidMessage(
+  msg: MessageJson | null,
+  providerFilter?: string
+): msg is MessageJson {
+  if (!msg) return false;
+  if (msg.role === "user") return false;
+  if (!msg.tokens) return false;
+
+  if (providerFilter) {
+    const providerId = msg.model?.providerID ?? msg.providerID ?? "unknown";
+    if (providerId.toLowerCase() !== providerFilter) return false;
+  }
+
+  return true;
 }

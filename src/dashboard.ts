@@ -1,0 +1,222 @@
+/**
+ * Dashboard orchestrator - unified multi-source usage view
+ */
+
+import { aggregateByDate, filterByDays } from "./aggregator.js";
+import type { CursorState, MessageJson, QuotaSnapshot } from "./types.js";
+import {
+  loadMessagesIncremental,
+  createCursor,
+  getOpenCodeStoragePath,
+  loadMessages,
+} from "./loader.js";
+import { loadMultiAccountQuota, loadAntigravityQuota } from "./quota-loader.js";
+import { loadCodexQuota } from "./codex-client.js";
+import { renderUsageTable } from "./dashboard/usage-table.js";
+import { renderQuotaPanel } from "./dashboard/quota-panel.js";
+import { renderStatusBar } from "./dashboard/status-bar.js";
+import { stdin } from "node:process";
+
+export type DashboardOptions = {
+  codexToken?: string;
+  refreshInterval?: number;
+  providerFilter?: string;
+  daysFilter?: number;
+};
+
+async function fetchAllQuotas(codexToken?: string): Promise<QuotaSnapshot[]> {
+  const quotas: QuotaSnapshot[] = [];
+
+  try {
+    const multiAccount = await loadMultiAccountQuota();
+    quotas.push(...multiAccount);
+  } catch (err) {
+    quotas.push({
+      source: "anthropic",
+      label: "Multi-Account",
+      used: 0,
+      error: `Load error: ${err}`,
+    });
+  }
+
+  try {
+    const antigravity = await loadAntigravityQuota();
+    quotas.push(...antigravity);
+  } catch (err) {
+    quotas.push({
+      source: "antigravity",
+      label: "Antigravity",
+      used: 0,
+      error: `Load error: ${err}`,
+    });
+  }
+
+  if (codexToken) {
+    try {
+      const codex = await loadCodexQuota(codexToken);
+      quotas.push(...codex);
+    } catch (err) {
+      quotas.push({
+        source: "codex",
+        label: "Codex",
+        used: 0,
+        error: `Load error: ${err}`,
+      });
+    }
+  }
+
+  return quotas;
+}
+
+function getTerminalSize(): { width: number; height: number } {
+  if (typeof process !== "undefined" && process.stdout) {
+    return {
+      width: process.stdout.columns ?? 80,
+      height: process.stdout.rows ?? 24,
+    };
+  }
+  return { width: 80, height: 24 };
+}
+
+function clearScreen(): void {
+  if (typeof process !== "undefined" && process.stdout) {
+    process.stdout.write("\x1b[2J\x1b[H");
+  }
+}
+
+function filterMessages(
+  messages: MessageJson[],
+  options: DashboardOptions
+): MessageJson[] {
+  let filtered = messages;
+
+  if (options.providerFilter) {
+    filtered = filtered.filter(
+      (msg) =>
+        msg.model?.providerID === options.providerFilter ||
+        msg.providerID === options.providerFilter
+    );
+  }
+
+  if (options.daysFilter) {
+    const cutoff = Date.now() - options.daysFilter * 24 * 60 * 60 * 1000;
+    filtered = filtered.filter(
+      (msg) => (msg.time?.created ?? 0) * 1000 >= cutoff
+    );
+  }
+
+  return filtered;
+}
+
+export async function runDashboard(options: DashboardOptions): Promise<void> {
+  const refreshInterval = options.refreshInterval ?? 300;
+  let cursor: CursorState = createCursor();
+  let allMessages: MessageJson[] = [];
+  let isFirstRender = true;
+  let currentDaysFilter = options.daysFilter ?? 30;
+
+  const render = async () => {
+    clearScreen();
+
+    const { width } = getTerminalSize();
+    const storagePath = getOpenCodeStoragePath();
+
+    if (isFirstRender) {
+      allMessages = await loadMessages(storagePath, options.providerFilter);
+      isFirstRender = false;
+    } else {
+      const result = await loadMessagesIncremental(
+        storagePath,
+        cursor,
+        options.providerFilter
+      );
+      cursor = result.cursor;
+      allMessages = [...allMessages, ...result.messages];
+    }
+
+    const filtered = filterMessages(allMessages, options);
+    let dailyStats = aggregateByDate(filtered);
+    
+    if (currentDaysFilter > 0) {
+      dailyStats = filterByDays(dailyStats, currentDaysFilter);
+    }
+
+    const quotas = await fetchAllQuotas(options.codexToken);
+
+    const responsiveBreakpoint = 168;
+    const sideBySide = width >= responsiveBreakpoint;
+
+    const usageTable = renderUsageTable(
+      dailyStats,
+      sideBySide ? Math.floor(width / 2) - 2 : width - 4
+    );
+    const quotaPanel = renderQuotaPanel(
+      quotas,
+      sideBySide ? Math.floor(width / 2) - 2 : width - 4
+    );
+    const statusBar = renderStatusBar(
+      { lastUpdate: Date.now(), refreshInterval, daysFilter: currentDaysFilter },
+      width
+    );
+
+    if (sideBySide) {
+      const usageLines = usageTable.split("\n");
+      const quotaLines = quotaPanel.split("\n");
+      const maxLines = Math.max(usageLines.length, quotaLines.length);
+
+      for (let i = 0; i < maxLines; i++) {
+        const left = usageLines[i] ?? "";
+        const right = quotaLines[i] ?? "";
+        const leftWidth = Math.floor(width / 2) - 2;
+        const paddedLeft = left.padEnd(leftWidth);
+        console.log(`${paddedLeft}  ${right}`);
+      }
+    } else {
+      console.log(usageTable);
+      console.log("");
+      console.log(quotaPanel);
+    }
+
+    console.log("");
+    console.log(statusBar);
+  };
+
+  if (stdin.isTTY) {
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.setEncoding("utf8");
+
+    stdin.on("data", async (key: string) => {
+      if (key === "\u0003") {
+        clearInterval(intervalId);
+        clearScreen();
+        process.exit(0);
+      }
+
+      if (key === "\u001b[A") {
+        currentDaysFilter = Math.max(1, currentDaysFilter - 7);
+        await render();
+      }
+
+      if (key === "\u001b[B") {
+        currentDaysFilter = currentDaysFilter === 0 ? 30 : currentDaysFilter + 7;
+        await render();
+      }
+    });
+  }
+
+  await render();
+
+  const intervalId = setInterval(async () => {
+    await render();
+  }, refreshInterval * 1000);
+
+  process.on("SIGINT", () => {
+    clearInterval(intervalId);
+    clearScreen();
+    if (stdin.isTTY) {
+      stdin.setRawMode(false);
+    }
+    process.exit(0);
+  });
+}

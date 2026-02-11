@@ -50,10 +50,14 @@
     "check:ci": "bun check.ts ci",
     "ck:warmup": "bun run scripts/warmup-ck.ts",
     "compile": "bun build --compile --minify ./src/index.ts --outfile opencode-usage",
-    "dev": "bun run ck:warmup & bun run ./src/index.ts",
+    "dev": "bun run ./src/index.ts",
+    "dev:warm": "bun run ck:warmup & bun run ./src/index.ts",
     "format": "bunx oxfmt",
     "lint": "bunx oxlint -c ./.oxlintrc.json --deny-warnings",
     "prepublishOnly": "bun run check && bun run build"
+  },
+  "dependencies": {
+    "@opentui/core": "^0.1.78"
   },
   "devDependencies": {
     "@types/bun": "latest",
