@@ -121,14 +121,14 @@ describe("cli", () => {
       expect(flags[0]).toBe("-w");
     });
 
-    test("recognizes dashboard flag", () => {
-      const flags = ["--dashboard"];
-      expect(flags[0]).toBe("--dashboard");
+    test("recognizes stats flag", () => {
+      const flags = ["--stats"];
+      expect(flags[0]).toBe("--stats");
     });
 
-    test("recognizes dashboard short flag", () => {
-      const flags = ["-D"];
-      expect(flags[0]).toBe("-D");
+    test("recognizes stats short flag", () => {
+      const flags = ["-S"];
+      expect(flags[0]).toBe("-S");
     });
 
     test("recognizes since flag", () => {

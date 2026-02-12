@@ -12,7 +12,7 @@ export type CliArgs = {
   json?: boolean;
   monthly?: boolean;
   watch?: boolean;
-  dashboard?: boolean;
+  stats?: boolean;
   config?: "show";
 };
 
@@ -70,7 +70,7 @@ export function parseArgs(): CliArgs {
         json: { type: "boolean", short: "j" },
         monthly: { type: "boolean", short: "m" },
         watch: { type: "boolean", short: "w" },
-        dashboard: { type: "boolean", short: "D" },
+        stats: { type: "boolean", short: "S" },
         config: { type: "string" },
         help: { type: "boolean", short: "h" },
       },
@@ -90,7 +90,7 @@ export function parseArgs(): CliArgs {
       json: values.json,
       monthly: values.monthly,
       watch: values.watch,
-      dashboard: values.dashboard,
+      stats: values.stats,
       config: values.config as "show" | undefined,
     };
   } catch (error) {
@@ -110,15 +110,18 @@ opencode-usage - Track OpenCode AI coding assistant usage and costs
 Usage:
   bunx opencode-usage [options]
 
+Modes:
+  (default)               Interactive dashboard (Bun only)
+  -S, --stats             Stats table mode (works with Node.js too)
+
 Options:
   -p, --provider <name>   Filter by provider (anthropic, openai, google, opencode)
   -d, --days <n>          Show only last N days
   -s, --since <date>      Start date (YYYYMMDD, YYYY-MM-DD, or 7d/1w/1m)
   -u, --until <date>      End date (YYYYMMDD, YYYY-MM-DD, or 7d/1w/1m)
-  -j, --json              Output as JSON
-  -m, --monthly           Aggregate by month instead of day
-  -w, --watch             Watch mode - refresh every 5 minutes
-  -D, --dashboard         Dashboard mode - unified multi-source view (Bun only)
+  -j, --json              Output as JSON (stats mode only)
+  -m, --monthly           Aggregate by month (stats mode only)
+  -w, --watch             Watch mode - refresh every 5 minutes (stats mode only)
       --config show       Show current configuration
   -h, --help              Show this help message
 
@@ -128,14 +131,11 @@ Codex Quota:
 
 Examples:
   bunx opencode-usage
-  bunx opencode-usage --provider anthropic
-  bunx opencode-usage -p openai -d 30
-  bunx opencode-usage --since 20251201 --until 20251231
-  bunx opencode-usage --since 7d
-  bunx opencode-usage --monthly --json
-  bunx opencode-usage --watch
-  bunx opencode-usage -w -d 1
-  bunx opencode-usage --dashboard
+  bunx opencode-usage --stats
+  bunx opencode-usage --stats --provider anthropic
+  bunx opencode-usage --stats -p openai -d 30
+  bunx opencode-usage --stats --since 7d --monthly --json
+  bunx opencode-usage --stats -w -d 1
   bunx opencode-usage --config show
 `);
 }

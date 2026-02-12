@@ -3,13 +3,10 @@
  * OpenCode Usage - CLI tool for tracking OpenCode AI usage and costs
  *
  * Usage:
- *   bunx opencode-usage
- *   bunx opencode-usage --provider anthropic
- *   bunx opencode-usage --days 30
- *   bunx opencode-usage --since 20251201 --until 20251231
- *   bunx opencode-usage --monthly --json
- *   bunx opencode-usage --watch
- *   bunx opencode-usage --dashboard
+ *   bunx opencode-usage                    (dashboard, default)
+ *   bunx opencode-usage --stats            (table mode)
+ *   bunx opencode-usage --stats -d 30
+ *   bunx opencode-usage --stats --monthly --json
  */
 
 import { parseArgs } from "./cli.js";
@@ -108,7 +105,7 @@ async function main(): Promise<void> {
     json,
     monthly,
     watch,
-    dashboard,
+    stats,
     config,
   } = parseArgs();
 
@@ -117,7 +114,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (dashboard) {
+  if (!stats) {
     await runSolidDashboard({
       refreshInterval: 300,
       providerFilter: provider,
