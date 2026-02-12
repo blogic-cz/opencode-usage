@@ -51,25 +51,29 @@ describe("loader - performance tests", () => {
       await mkdir(sessionDir, { recursive: true });
 
       for (let f = 0; f < filesPerSession; f++) {
-        const ageMs = (sessionsToCreate - s) * 1000 * 60 * 60 + (filesPerSession - f) * 1000;
+        const ageMs =
+          (sessionsToCreate - s) * 1000 * 60 * 60 +
+          (filesPerSession - f) * 1000;
         const timestamp = now - ageMs;
-        
+
         const msg = createTestMessage(
           `msg-${s}-${f}`,
           `session-${s}`,
           "anthropic",
           timestamp
         );
-        
+
         const filePath = join(sessionDir, `msg-${f}.json`);
         await writeFile(filePath, JSON.stringify(msg));
-        
+
         const mtime = new Date(timestamp);
         await utimes(filePath, mtime, mtime);
       }
     }
 
-    console.log(`Created ${sessionsToCreate * filesPerSession} test messages in ${sessionsToCreate} sessions`);
+    console.log(
+      `Created ${sessionsToCreate * filesPerSession} test messages in ${sessionsToCreate} sessions`
+    );
   });
 
   afterAll(async () => {
@@ -96,7 +100,7 @@ describe("loader - performance tests", () => {
     const messages = await loadRecentMessages(testDir, 24);
 
     expect(messages.length).toBeGreaterThan(0);
-    
+
     for (const msg of messages) {
       const messageTime = msg.time?.created || 0;
       const ageHours = (Date.now() - messageTime) / (1000 * 60 * 60);
@@ -132,15 +136,22 @@ describe("loader - performance tests", () => {
     const fullMessages = await loadMessages(testDir);
     const fullDuration = performance.now() - startFull;
 
-    console.log(`Recent (24h): ${recentDuration.toFixed(2)}ms (${recentMessages.length} messages)`);
-    console.log(`Full: ${fullDuration.toFixed(2)}ms (${fullMessages.length} messages)`);
-    console.log(`Speedup: ${(fullDuration / recentDuration).toFixed(2)}x faster`);
+    console.log(
+      `Recent (24h): ${recentDuration.toFixed(2)}ms (${recentMessages.length} messages)`
+    );
+    console.log(
+      `Full: ${fullDuration.toFixed(2)}ms (${fullMessages.length} messages)`
+    );
+    console.log(
+      `Speedup: ${(fullDuration / recentDuration).toFixed(2)}x faster`
+    );
 
     expect(recentDuration).toBeLessThan(fullDuration);
   });
 
   it("loadRecentMessages() with different time windows", async () => {
-    const timings: Array<{ hours: number; duration: number; count: number }> = [];
+    const timings: Array<{ hours: number; duration: number; count: number }> =
+      [];
 
     for (const hours of [1, 6, 12, 24]) {
       const start = performance.now();
@@ -171,8 +182,12 @@ describe("loader - performance tests", () => {
     const withFilter = await loadRecentMessages(testDir, 24, "anthropic");
     const durationWithFilter = performance.now() - startWithFilter;
 
-    console.log(`Without filter: ${durationWithoutFilter.toFixed(2)}ms (${withoutFilter.length} messages)`);
-    console.log(`With filter: ${durationWithFilter.toFixed(2)}ms (${withFilter.length} messages)`);
+    console.log(
+      `Without filter: ${durationWithoutFilter.toFixed(2)}ms (${withoutFilter.length} messages)`
+    );
+    console.log(
+      `With filter: ${durationWithFilter.toFixed(2)}ms (${withFilter.length} messages)`
+    );
 
     expect(durationWithFilter).toBeLessThan(durationWithoutFilter * 2.0);
     expect(withFilter.length).toBe(withoutFilter.length);

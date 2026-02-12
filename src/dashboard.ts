@@ -3,7 +3,12 @@
  */
 
 import { aggregateByDate, filterByDays } from "./aggregator.js";
-import type { CursorState, MessageJson, QuotaSnapshot, DailyStats } from "./types.js";
+import type {
+  CursorState,
+  MessageJson,
+  QuotaSnapshot,
+  DailyStats,
+} from "./types.js";
 import {
   loadMessagesIncremental,
   createCursor,
@@ -156,7 +161,11 @@ export async function runDashboard(options: DashboardOptions): Promise<void> {
       sideBySide ? Math.floor(width / 2) - 2 : width - 4
     );
     const statusBar = renderStatusBar(
-      { lastUpdate: Date.now(), refreshInterval, daysFilter: currentDaysFilter },
+      {
+        lastUpdate: Date.now(),
+        refreshInterval,
+        daysFilter: currentDaysFilter,
+      },
       width
     );
 

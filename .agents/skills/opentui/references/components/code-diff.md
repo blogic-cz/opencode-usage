@@ -34,6 +34,7 @@ const codeBlock = new CodeRenderable(renderer, {
 ### Supported Languages
 
 OpenTUI uses Tree-sitter for syntax highlighting. Common languages:
+
 - `typescript`, `javascript`
 - `python`
 - `rust`
@@ -148,6 +149,7 @@ Show errors, warnings, and info on specific lines:
 ```
 
 **Diagnostic severity levels:**
+
 - `error` - Red indicator
 - `warning` - Yellow indicator
 - `info` - Blue indicator
@@ -161,8 +163,8 @@ Show added/removed lines:
 <line-number
   code={sourceCode}
   language="typescript"
-  addedLines={[5, 6, 7]}      // Green background
-  removedLines={[10, 11]}     // Red background
+  addedLines={[5, 6, 7]} // Green background
+  removedLines={[10, 11]} // Red background
 />
 ```
 
@@ -223,7 +225,7 @@ const diffView = new DiffRenderable(renderer, {
   language="typescript"
   mode="unified"
   showLineNumbers
-  context={3}                // Lines of context around changes
+  context={3} // Lines of context around changes
 />
 ```
 
@@ -247,8 +249,8 @@ const diffView = new DiffRenderable(renderer, {
 function CodeEditor() {
   const [code, setCode] = useState(`function hello() {
   console.log("Hello!");
-}`)
-  
+}`);
+
   return (
     <box flexDirection="column" height="100%">
       <box height={1}>
@@ -263,7 +265,7 @@ function CodeEditor() {
         focused
       />
     </box>
-  )
+  );
 }
 ```
 
@@ -284,7 +286,7 @@ function CodeReview({ oldCode, newCode }) {
         showLineNumbers
       />
     </box>
-  )
+  );
 }
 ```
 
@@ -293,20 +295,17 @@ function CodeReview({ oldCode, newCode }) {
 ```tsx
 function MarkdownPreview({ content }) {
   // Extract code blocks from markdown
-  const codeBlocks = extractCodeBlocks(content)
-  
+  const codeBlocks = extractCodeBlocks(content);
+
   return (
     <scrollbox height={20}>
       {codeBlocks.map((block, i) => (
         <box key={i} marginBottom={1}>
-          <code
-            code={block.code}
-            language={block.language}
-          />
+          <code code={block.code} language={block.language} />
         </box>
       ))}
     </scrollbox>
-  )
+  );
 }
 ```
 
@@ -314,20 +313,20 @@ function MarkdownPreview({ content }) {
 
 ```tsx
 function ErrorView({ errors, code }) {
-  const diagnostics = errors.map(err => ({
+  const diagnostics = errors.map((err) => ({
     line: err.line,
     severity: "error",
     message: err.message,
-  }))
-  
+  }));
+
   return (
     <line-number
       code={code}
       language="typescript"
       diagnostics={diagnostics}
-      highlightedLines={errors.map(e => e.line)}
+      highlightedLines={errors.map((e) => e.line)}
     />
-  )
+  );
 }
 ```
 
@@ -356,16 +355,14 @@ function ErrorView({ errors, code }) {
 ### Large Files
 
 For very large files, consider:
+
 - Pagination or virtual scrolling
 - Loading only visible portion
 - Using `scrollbox` wrapper
 
 ```tsx
 <scrollbox height={30}>
-  <line-number
-    code={largeFile}
-    language="typescript"
-  />
+  <line-number code={largeFile} language="typescript" />
 </scrollbox>
 ```
 

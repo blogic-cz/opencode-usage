@@ -11,16 +11,8 @@
     "declaration": true,
     "jsx": "preserve",
     "jsxImportSource": "@opentui/solid",
-    "types": [
-      "bun-types"
-    ]
+    "types": ["bun-types"]
   },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "opensrc"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "opensrc"]
 }

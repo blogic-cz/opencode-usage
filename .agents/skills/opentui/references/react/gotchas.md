@@ -8,17 +8,17 @@
 
 ```tsx
 // WRONG - Terminal left in broken state
-process.exit(0)
+process.exit(0);
 
 // CORRECT - Use renderer.destroy()
-import { useRenderer } from "@opentui/react"
+import { useRenderer } from "@opentui/react";
 
 function App() {
-  const renderer = useRenderer()
-  
+  const renderer = useRenderer();
+
   const handleExit = () => {
-    renderer.destroy()  // Cleans up and exits properly
-  }
+    renderer.destroy(); // Cleans up and exits properly
+  };
 }
 ```
 
@@ -147,13 +147,17 @@ Multiple `useKeyboard` hooks can conflict:
 ```tsx
 // Both handlers fire - may cause issues
 function App() {
-  useKeyboard((key) => { /* parent handler */ })
-  return <ChildWithKeyboard />
+  useKeyboard((key) => {
+    /* parent handler */
+  });
+  return <ChildWithKeyboard />;
 }
 
 function ChildWithKeyboard() {
-  useKeyboard((key) => { /* child handler */ })
-  return <text>Child</text>
+  useKeyboard((key) => {
+    /* child handler */
+  });
+  return <text>Child</text>;
 }
 ```
 
@@ -161,17 +165,17 @@ function ChildWithKeyboard() {
 
 ```tsx
 function App() {
-  const [handled, setHandled] = useState(false)
-  
+  const [handled, setHandled] = useState(false);
+
   useKeyboard((key) => {
     if (handled) {
-      setHandled(false)
-      return
+      setHandled(false);
+      return;
     }
     // Handle at app level
-  })
-  
-  return <Child onKeyHandled={() => setHandled(true)} />
+  });
+
+  return <Child onKeyHandled={() => setHandled(true)} />;
 }
 ```
 
@@ -182,14 +186,14 @@ Always clean up intervals and listeners:
 ```tsx
 // WRONG - Memory leak
 useEffect(() => {
-  setInterval(() => updateData(), 1000)
-}, [])
+  setInterval(() => updateData(), 1000);
+}, []);
 
 // CORRECT
 useEffect(() => {
-  const interval = setInterval(() => updateData(), 1000)
-  return () => clearInterval(interval)  // Cleanup!
-}, [])
+  const interval = setInterval(() => updateData(), 1000);
+  return () => clearInterval(interval); // Cleanup!
+}, []);
 ```
 
 ## Styling Issues
@@ -264,19 +268,19 @@ const style = useMemo(() => ({ padding: 2 }), [])
 Use React.memo for expensive components:
 
 ```tsx
-const ExpensiveList = React.memo(function ExpensiveList({ 
-  items 
-}: { 
-  items: Item[] 
+const ExpensiveList = React.memo(function ExpensiveList({
+  items,
+}: {
+  items: Item[];
 }) {
   return (
     <box flexDirection="column">
-      {items.map(item => (
+      {items.map((item) => (
         <text key={item.id}>{item.name}</text>
       ))}
     </box>
-  )
-})
+  );
+});
 ```
 
 ### State Updates During Render
@@ -286,27 +290,27 @@ Don't update state during render:
 ```tsx
 // WRONG
 function Component({ value }: { value: number }) {
-  const [count, setCount] = useState(0)
-  
+  const [count, setCount] = useState(0);
+
   // This causes infinite loop!
   if (value > 10) {
-    setCount(value)
+    setCount(value);
   }
-  
-  return <text>{count}</text>
+
+  return <text>{count}</text>;
 }
 
 // CORRECT
 function Component({ value }: { value: number }) {
-  const [count, setCount] = useState(0)
-  
+  const [count, setCount] = useState(0);
+
   useEffect(() => {
     if (value > 10) {
-      setCount(value)
+      setCount(value);
     }
-  }, [value])
-  
-  return <text>{count}</text>
+  }, [value]);
+
+  return <text>{count}</text>;
 }
 ```
 
@@ -317,18 +321,18 @@ function Component({ value }: { value: number }) {
 OpenTUI captures console output. Show the overlay:
 
 ```tsx
-import { useRenderer } from "@opentui/react"
-import { useEffect } from "react"
+import { useRenderer } from "@opentui/react";
+import { useEffect } from "react";
 
 function App() {
-  const renderer = useRenderer()
-  
+  const renderer = useRenderer();
+
   useEffect(() => {
-    renderer.console.show()
-    console.log("Now you can see this!")
-  }, [renderer])
-  
-  return <box>{/* ... */}</box>
+    renderer.console.show();
+    console.log("Now you can see this!");
+  }, [renderer]);
+
+  return <box>{/* ... */}</box>;
 }
 ```
 
@@ -339,14 +343,14 @@ Check if component is in the tree:
 ```tsx
 // WRONG - Conditional returns nothing
 function MaybeComponent({ show }: { show: boolean }) {
-  if (!show) return  // Returns undefined!
-  return <text>Visible</text>
+  if (!show) return; // Returns undefined!
+  return <text>Visible</text>;
 }
 
 // CORRECT
 function MaybeComponent({ show }: { show: boolean }) {
-  if (!show) return null  // Explicit null
-  return <text>Visible</text>
+  if (!show) return null; // Explicit null
+  return <text>Visible</text>;
 }
 ```
 
@@ -383,16 +387,16 @@ Bun supports top-level await, but be careful:
 
 ```tsx
 // index.tsx - This works in Bun
-const renderer = await createCliRenderer()
-createRoot(renderer).render(<App />)
+const renderer = await createCliRenderer();
+createRoot(renderer).render(<App />);
 
 // If you need to handle errors
 try {
-  const renderer = await createCliRenderer()
-  createRoot(renderer).render(<App />)
+  const renderer = await createCliRenderer();
+  createRoot(renderer).render(<App />);
 } catch (error) {
-  console.error("Failed to initialize:", error)
-  process.exit(1)
+  console.error("Failed to initialize:", error);
+  process.exit(1);
 }
 ```
 
@@ -404,12 +408,12 @@ Renderer not initialized:
 
 ```tsx
 // WRONG
-const renderer = createCliRenderer()  // Missing await!
-createRoot(renderer).render(<App />)
+const renderer = createCliRenderer(); // Missing await!
+createRoot(renderer).render(<App />);
 
 // CORRECT
-const renderer = await createCliRenderer()
-createRoot(renderer).render(<App />)
+const renderer = await createCliRenderer();
+createRoot(renderer).render(<App />);
 ```
 
 ### "Invalid hook call"
@@ -418,15 +422,15 @@ Hooks called outside component:
 
 ```tsx
 // WRONG
-const dimensions = useTerminalDimensions()  // Outside component!
+const dimensions = useTerminalDimensions(); // Outside component!
 
 function App() {
-  return <text>{dimensions.width}</text>
+  return <text>{dimensions.width}</text>;
 }
 
 // CORRECT
 function App() {
-  const dimensions = useTerminalDimensions()
-  return <text>{dimensions.width}</text>
+  const dimensions = useTerminalDimensions();
+  return <text>{dimensions.width}</text>;
 }
 ```

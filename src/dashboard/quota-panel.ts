@@ -5,7 +5,7 @@
 import type { QuotaSnapshot } from "../types.js";
 
 function visibleLength(str: string): number {
-  return str.replace(/\x1b\[[0-9;]*m/g, "").length;
+  return str.replace(/\u001b\[[0-9;]*m/g, "").length;
 }
 
 function padRight(str: string, len: number): string {
@@ -57,15 +57,14 @@ function formatResetTime(resetAt?: number): string {
 
 export function renderQuotaPanel(
   quotas: QuotaSnapshot[],
-  width?: number
+  _width?: number
 ): string {
-  const effectiveWidth = width ?? 70;
   const labelWidth = 35;
   const barWidth = 35;
   const percentWidth = 5;
   const resetWidth = 22;
   const totalWidth = labelWidth + barWidth + percentWidth + resetWidth + 6;
-  
+
   const h = "─";
   const v = "│";
   const tl = "┌";
@@ -109,7 +108,7 @@ export function renderQuotaPanel(
         const reset = formatResetTime(quota.resetAt);
         const label = padRight(`  ${quota.label}`, labelWidth);
         const resetPadded = padLeft(reset, resetWidth);
-        
+
         output += v + " " + label + bar + resetPadded + " " + v + "\n";
       }
     }

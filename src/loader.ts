@@ -69,7 +69,7 @@ export async function loadRecentMessages(
       try {
         const sessionStat = await stat(sessionPath);
         if (!sessionStat.isDirectory()) continue;
-        
+
         if (sessionStat.mtimeMs < cutoffTime) {
           continue;
         }

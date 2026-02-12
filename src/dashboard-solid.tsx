@@ -1,7 +1,12 @@
 import { render, useKeyboard, useTerminalDimensions } from "@opentui/solid";
 import { createSignal, onMount, For, Show } from "solid-js";
-import type { DailyStats, QuotaSnapshot, MessageJson, CursorState } from "./types.js";
-import { aggregateByDate, filterByDays } from "./aggregator.js";
+import type {
+  DailyStats,
+  QuotaSnapshot,
+  MessageJson,
+  CursorState,
+} from "./types.js";
+import { aggregateByDate } from "./aggregator.js";
 import {
   loadMessages,
   loadRecentMessages,
@@ -42,47 +47,88 @@ const COLORS = {
 const padLeft = (str: string, width: number) => str.padStart(width, " ");
 const padRight = (str: string, width: number) => str.padEnd(width, " ");
 
-function UsageTable(props: { 
-  stats: Map<string, DailyStats>; 
-  pageOffset: number; 
-  daysFilter: number; 
+function UsageTable(props: {
+  stats: Map<string, DailyStats>;
+  pageOffset: number;
+  daysFilter: number;
   internalScroll: number;
   maxVisibleDays: number;
   isLoading: boolean;
-  isSelected: boolean; 
-  width?: number | "auto" | `${number}%` 
+  isSelected: boolean;
+  width?: number | "auto" | `${number}%`;
 }) {
+  const getWindowedData = () => {
+    const allEntries = Array.from(props.stats.entries());
+    const sortedByDateDesc = allEntries.sort((a, b) =>
+      b[0].localeCompare(a[0])
+    );
+    const afterScrollOffset = sortedByDateDesc.slice(props.pageOffset);
+    const requestedDays = props.daysFilter === 0 ? 10 : props.daysFilter;
+    return afterScrollOffset.slice(0, requestedDays);
+  };
+
   const statsArray = () => {
-    const allEntries = Array.from(props.stats.entries());
-    const sortedByDateDesc = allEntries.sort((a, b) => b[0].localeCompare(a[0]));
-    const afterScrollOffset = sortedByDateDesc.slice(props.pageOffset);
-    const requestedDays = props.daysFilter === 0 ? 10 : props.daysFilter;
-    const windowedData = afterScrollOffset.slice(0, requestedDays);
-    const visibleData = windowedData.slice(props.internalScroll, props.internalScroll + props.maxVisibleDays);
-    return visibleData;
+    const windowedData = getWindowedData();
+    return windowedData.slice(
+      props.internalScroll,
+      props.internalScroll + props.maxVisibleDays
+    );
   };
-  
-  const totalDaysInWindow = () => {
-    const allEntries = Array.from(props.stats.entries());
-    const sortedByDateDesc = allEntries.sort((a, b) => b[0].localeCompare(a[0]));
-    const afterScrollOffset = sortedByDateDesc.slice(props.pageOffset);
-    const requestedDays = props.daysFilter === 0 ? 10 : props.daysFilter;
-    return Math.min(afterScrollOffset.length, requestedDays);
-  };
+
+  const totalDaysInWindow = () => getWindowedData().length;
 
   const formatNum = (n: number) => n.toLocaleString("en-US");
   const formatCost = (c: number) => `$${c.toFixed(2)}`;
 
+  const formatDateRange = () => {
+    const windowedData = getWindowedData();
+    if (windowedData.length === 0) return "";
+
+    const firstDate = windowedData[0][0];
+    const lastDate = windowedData[windowedData.length - 1][0];
+
+    if (props.daysFilter === 1) {
+      return firstDate;
+    }
+
+    if (props.daysFilter === 7) {
+      const start = new Date(firstDate);
+      const end = new Date(lastDate);
+      const monthName = start.toLocaleDateString("en-US", { month: "short" });
+      return `${monthName} ${start.getDate()}-${end.getDate()}`;
+    }
+
+    if (props.daysFilter === 30) {
+      const start = new Date(firstDate);
+      const end = new Date(lastDate);
+      const startMonth = start.toLocaleDateString("en-US", { month: "short" });
+      const endMonth = end.toLocaleDateString("en-US", { month: "short" });
+
+      if (startMonth === endMonth) {
+        return `${startMonth} ${start.getDate()}-${end.getDate()}`;
+      }
+      return `${startMonth} ${start.getDate()} - ${endMonth} ${end.getDate()}`;
+    }
+
+    if (firstDate === lastDate) {
+      return firstDate;
+    }
+
+    const start = new Date(firstDate);
+    const end = new Date(lastDate);
+    return `${start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${end.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+  };
+
   const totalStats = () => {
-    const displayed = statsArray();
+    const windowedData = getWindowedData();
     let totalTokens = 0;
     let totalCost = 0;
-    
-    displayed.forEach(([_, stat]) => {
+
+    windowedData.forEach(([_, stat]) => {
       totalTokens += stat.input + stat.output;
       totalCost += stat.cost;
     });
-    
+
     return { tokens: totalTokens, cost: totalCost };
   };
 
@@ -95,18 +141,27 @@ function UsageTable(props: {
       height="auto"
       flexGrow={1}
       backgroundColor={COLORS.bg.secondary}
-      padding={1}
+      padding={0}
     >
       <box flexDirection="column">
-        <box padding-bottom={1} border-bottom border-color={COLORS.border}>
+        <box paddingBottom={0} paddingLeft={1}>
           <text fg={COLORS.accent.teal}>
             <b>■ USAGE BREAKDOWN</b>
-            {props.pageOffset > 0 && (
-              <span style={{ fg: COLORS.text.muted }}> (←{props.pageOffset} days back)</span>
+            {statsArray().length > 0 && (
+              <span style={{ fg: COLORS.text.muted }}>
+                {" "}
+                ({formatDateRange()})
+              </span>
             )}
             {totalDaysInWindow() > props.maxVisibleDays && (
               <span style={{ fg: COLORS.text.muted }}>
-                {" "}[{props.internalScroll + 1}-{Math.min(props.internalScroll + props.maxVisibleDays, totalDaysInWindow())} of {totalDaysInWindow()}]
+                {" "}
+                [{props.internalScroll + 1}-
+                {Math.min(
+                  props.internalScroll + props.maxVisibleDays,
+                  totalDaysInWindow()
+                )}{" "}
+                of {totalDaysInWindow()}]
               </span>
             )}
             {props.isLoading && (
@@ -115,9 +170,18 @@ function UsageTable(props: {
           </text>
         </box>
 
-        <box padding-top={1} padding-bottom={1} border-bottom border-color={COLORS.border}>
+        <box
+          padding-top={1}
+          padding-bottom={1}
+          border-bottom
+          border-color={COLORS.border}
+        >
           <text fg={COLORS.text.muted} wrapMode="none">
-            <b>{padRight("DATE", 18)}{padLeft("TOKENS", 13)}{padLeft("COST", 10)}</b>
+            <b>
+              {padRight("DATE", 18)}
+              {padLeft("TOKENS", 13)}
+              {padLeft("COST", 10)}
+            </b>
           </text>
         </box>
 
@@ -126,18 +190,26 @@ function UsageTable(props: {
             const isLast = index() === statsArray().length - 1;
             const isEven = index() % 2 === 0;
             const providers = Array.from(stat.providerStats.entries());
-            
+
             return (
               <>
-                <box 
-                  padding-top={0.5} 
+                <box
+                  padding-top={0.5}
                   padding-bottom={providers.length > 0 ? 0.25 : 0.5}
-                  background-color={isEven ? COLORS.bg.secondary : COLORS.bg.accent}
+                  background-color={
+                    isEven ? COLORS.bg.secondary : COLORS.bg.accent
+                  }
                 >
                   <text overflow="hidden" wrapMode="none">
-                    <span style={{ fg: COLORS.text.primary, bold: true }}>{padRight(dateKey, 18)}</span>
-                    <span style={{ fg: COLORS.accent.cyan, bold: true }}>{padLeft(formatNum(stat.input + stat.output), 13)}</span>
-                    <span style={{ fg: COLORS.accent.amber, bold: true }}>{padLeft(formatCost(stat.cost), 10)}</span>
+                    <span style={{ fg: COLORS.text.primary, bold: true }}>
+                      {padRight(dateKey, 18)}
+                    </span>
+                    <span style={{ fg: COLORS.accent.cyan, bold: true }}>
+                      {padLeft(formatNum(stat.input + stat.output), 13)}
+                    </span>
+                    <span style={{ fg: COLORS.accent.amber, bold: true }}>
+                      {padLeft(formatCost(stat.cost), 10)}
+                    </span>
                   </text>
                 </box>
 
@@ -145,16 +217,29 @@ function UsageTable(props: {
                   {([providerId, providerStat], pIndex) => {
                     const isLastProvider = pIndex() === providers.length - 1;
                     return (
-                      <box 
-                        padding-top={0.25} 
+                      <box
+                        padding-top={0.25}
                         padding-bottom={isLastProvider ? 0.5 : 0.25}
                         padding-left={2}
-                        background-color={isEven ? COLORS.bg.secondary : COLORS.bg.accent}
+                        background-color={
+                          isEven ? COLORS.bg.secondary : COLORS.bg.accent
+                        }
                       >
                         <text overflow="hidden" wrapMode="none">
-                          <span style={{ fg: COLORS.text.muted }}>{padRight(`[${providerId}]`, 18)}</span>
-                          <span style={{ fg: COLORS.accent.cyan }}>{padLeft(formatNum(providerStat.input + providerStat.output), 13)}</span>
-                          <span style={{ fg: COLORS.accent.amber }}>{padLeft(formatCost(providerStat.cost), 10)}</span>
+                          <span style={{ fg: COLORS.text.muted }}>
+                            {padRight(`[${providerId}]`, 18)}
+                          </span>
+                          <span style={{ fg: COLORS.accent.cyan }}>
+                            {padLeft(
+                              formatNum(
+                                providerStat.input + providerStat.output
+                              ),
+                              13
+                            )}
+                          </span>
+                          <span style={{ fg: COLORS.accent.amber }}>
+                            {padLeft(formatCost(providerStat.cost), 10)}
+                          </span>
                         </text>
                       </box>
                     );
@@ -162,27 +247,29 @@ function UsageTable(props: {
                 </For>
 
                 {!isLast && (
-                  <box 
-                    height={1} 
-                    border-bottom 
-                    border-color={COLORS.border}
-                  />
+                  <box height={1} border-bottom border-color={COLORS.border} />
                 )}
               </>
             );
           }}
         </For>
 
-        <box 
-          padding-top={1} 
+        <box
+          padding-top={1}
           padding-bottom={0.5}
           border-top
           border-color={COLORS.border}
         >
           <text wrapMode="none">
-            <span style={{ fg: COLORS.accent.teal, bold: true }}>{padRight("TOTAL", 18)}</span>
-            <span style={{ fg: COLORS.accent.cyan, bold: true }}>{padLeft(formatNum(totalStats().tokens), 13)}</span>
-            <span style={{ fg: COLORS.accent.amber, bold: true }}>{padLeft(formatCost(totalStats().cost), 10)}</span>
+            <span style={{ fg: COLORS.accent.teal, bold: true }}>
+              {padRight("TOTAL", 18)}
+            </span>
+            <span style={{ fg: COLORS.accent.cyan, bold: true }}>
+              {padLeft(formatNum(totalStats().tokens), 13)}
+            </span>
+            <span style={{ fg: COLORS.accent.amber, bold: true }}>
+              {padLeft(formatCost(totalStats().cost), 10)}
+            </span>
           </text>
         </box>
       </box>
@@ -190,7 +277,11 @@ function UsageTable(props: {
   );
 }
 
-function QuotaPanel(props: { quotas: QuotaSnapshot[]; isSelected: boolean; width?: number | "auto" | `${number}%` }) {
+function QuotaPanel(props: {
+  quotas: QuotaSnapshot[];
+  isSelected: boolean;
+  width?: number | "auto" | `${number}%`;
+}) {
   const renderBar = (used: number, width: number = 30) => {
     const filled = Math.round(used * width);
     const empty = width - filled;
@@ -207,14 +298,27 @@ function QuotaPanel(props: { quotas: QuotaSnapshot[]; isSelected: boolean; width
     if (!resetAt) return "";
     const resetDate = new Date(resetAt * 1000);
     const now = new Date();
-    
+
     if (resetDate <= now) return "⟳ resetting...";
-    
-    const day = resetDate.getDate().toString().padStart(2, "0");
-    const month = (resetDate.getMonth() + 1).toString().padStart(2, "0");
+
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dayAfter = new Date(today);
+    dayAfter.setDate(dayAfter.getDate() + 2);
+
     const hours = resetDate.getHours().toString().padStart(2, "0");
     const mins = resetDate.getMinutes().toString().padStart(2, "0");
-    
+
+    if (resetDate >= today && resetDate < tomorrow) {
+      return `↻ today ${hours}:${mins}`;
+    }
+    if (resetDate >= tomorrow && resetDate < dayAfter) {
+      return `↻ tomorrow ${hours}:${mins}`;
+    }
+
+    const day = resetDate.getDate().toString().padStart(2, "0");
+    const month = (resetDate.getMonth() + 1).toString().padStart(2, "0");
     return `↻ ${day}.${month}. ${hours}:${mins}`;
   };
 
@@ -236,10 +340,10 @@ function QuotaPanel(props: { quotas: QuotaSnapshot[]; isSelected: boolean; width
       height="auto"
       flexGrow={1}
       backgroundColor={COLORS.bg.secondary}
-      padding={1}
+      padding={0}
     >
       <box flexDirection="column">
-        <box padding-bottom={1} border-bottom border-color={COLORS.border}>
+        <box paddingBottom={0} paddingLeft={1}>
           <text fg={COLORS.accent.teal}>
             <b>■ QUOTA STATUS</b>
           </text>
@@ -258,61 +362,96 @@ function QuotaPanel(props: { quotas: QuotaSnapshot[]; isSelected: boolean; width
             };
 
             return (
-              <box flex-direction="column" padding-top={1}>
-                <text fg={COLORS.text.primary}>
-                  <b>▸ {source.toUpperCase()}</b>
-                </text>
-                
+              <box flexDirection="column" paddingTop={0} flexShrink={0} gap={0}>
+                <box flexShrink={0} paddingTop={1} paddingBottom={0}>
+                  <text fg={COLORS.text.primary} flexShrink={0} wrapMode="none">
+                    <b>▸ {source.toUpperCase()}</b>
+                  </text>
+                </box>
+
                 <For each={groupByAccount()}>
                   {([accountName, accountQuotas], accountIndex) => {
                     const isActive = accountName.includes("[ACTIVE]");
-                    const cleanName = accountName.replace(" [ACTIVE]", "").trim();
-                    
+                    const cleanName = accountName
+                      .replace(" [ACTIVE]", "")
+                      .trim();
+
                     return (
-                      <box 
-                        flexDirection="column" 
-                        paddingBottom={accountIndex() < groupByAccount().length - 1 ? 0.75 : 0}
-                        paddingTop={0.5}
+                      <box
+                        flexDirection="column"
+                        flexShrink={0}
+                        marginBottom={0}
+                        paddingTop={0}
+                        paddingBottom={0}
                         paddingLeft={1}
                         paddingRight={1}
-                        marginLeft={1}
-                        marginRight={1}
+                        marginLeft={0}
+                        marginRight={0}
                         border
                         borderStyle="rounded"
                         borderColor={isActive ? "#14b8a6" : "#334155"}
                       >
-                        <box padding-bottom={0.25}>
-                          <text>
+                        <box paddingBottom={0} flexShrink={0}>
+                          <text flexShrink={0} wrapMode="none">
                             {isActive ? (
                               <>
-                                <span style={{ fg: COLORS.accent.teal, bold: true }}>● {cleanName}</span>
-                                <span style={{ fg: COLORS.accent.teal }}> (ACTIVE)</span>
+                                <span
+                                  style={{ fg: COLORS.accent.teal, bold: true }}
+                                >
+                                  ● {cleanName}
+                                </span>
+                                <span style={{ fg: COLORS.accent.teal }}>
+                                  {" "}
+                                  (ACTIVE)
+                                </span>
                               </>
                             ) : (
-                              <span style={{ fg: COLORS.text.primary, bold: true }}>{cleanName}</span>
+                              <span
+                                style={{ fg: COLORS.text.primary, bold: true }}
+                              >
+                                {cleanName}
+                              </span>
                             )}
                           </text>
                         </box>
-                        
+
                         <For each={accountQuotas}>
                           {(quota) => {
-                            const displayLabel = quota.label.replace(accountName, "").replace(/^[\s-]+/, "").trim();
-                            
+                            const displayLabel = quota.label
+                              .replace(accountName, "")
+                              .replace(/^[\s-]+/, "")
+                              .trim();
+
                             return (
                               <Show
                                 when={!quota.error}
                                 fallback={
-                                  <box padding-left={1} padding-top={0.25}>
-                                    <text fg={COLORS.accent.red}>✗ {displayLabel}: {quota.error}</text>
+                                  <box paddingLeft={1} flexShrink={0}>
+                                    <text fg={COLORS.accent.red}>
+                                      ✗ {displayLabel}: {quota.error}
+                                    </text>
                                   </box>
                                 }
                               >
-                                <box padding-left={1} padding-top={0.25}>
+                                <box paddingLeft={1} flexShrink={0}>
                                   <text wrapMode="none">
-                                    <span style={{ fg: COLORS.text.secondary }}>{padRight(displayLabel, 15)}</span>
-                                    <span style={{ fg: getColor(quota.used) }}>{renderBar(quota.used, 20)}</span>
-                                    <span style={{ fg: COLORS.text.primary }}> {padLeft((quota.used * 100).toFixed(0) + "%", 4)}</span>
-                                    <span style={{ fg: COLORS.text.muted }}> {formatResetTime(quota.resetAt)}</span>
+                                    <span style={{ fg: COLORS.text.secondary }}>
+                                      {padRight(displayLabel, 15)}
+                                    </span>
+                                    <span style={{ fg: getColor(quota.used) }}>
+                                      {renderBar(quota.used, 20)}
+                                    </span>
+                                    <span style={{ fg: COLORS.text.primary }}>
+                                      {" "}
+                                      {padLeft(
+                                        (quota.used * 100).toFixed(0) + "%",
+                                        4
+                                      )}
+                                    </span>
+                                    <span style={{ fg: COLORS.text.muted }}>
+                                      {" "}
+                                      {formatResetTime(quota.resetAt)}
+                                    </span>
                                   </text>
                                 </box>
                               </Show>
@@ -359,11 +498,16 @@ function StatusBar(props: { daysFilter: number; lastUpdate: Date }) {
       padding-right={1}
     >
       <text fg={COLORS.text.secondary} wrapMode="none">
-        <span style={{ fg: COLORS.accent.teal }}>⟳ {formatTime(props.lastUpdate)}</span>
+        <span style={{ fg: COLORS.accent.teal }}>
+          ⟳ {formatTime(props.lastUpdate)}
+        </span>
         {" │ "}
         DAYS: <span style={{ fg: COLORS.accent.teal }}>{daysLabel()}</span>
         {" │ "}
-        <span style={{ fg: COLORS.text.muted }}>TAB:PANEL ↑↓:SCROLL ←→:DAYS t:TODAY w:WEEK m:MONTH a:ALL HOME:RESET ^C:EXIT</span>
+        <span style={{ fg: COLORS.text.muted }}>
+          TAB:PANEL ↑↓:SCROLL ←→:DAYS t:TODAY w:WEEK m:MONTH a:ALL HOME:RESET
+          ^C:EXIT
+        </span>
       </text>
     </box>
   );
@@ -373,23 +517,29 @@ function Dashboard(props: DashboardProps) {
   const [daysFilter, setDaysFilter] = createSignal(props.initialDays ?? 1);
   const [lastUpdate, setLastUpdate] = createSignal(new Date());
   const [allMessages, setAllMessages] = createSignal<MessageJson[]>([]);
-  const [cachedStats, setCachedStats] = createSignal<Map<string, DailyStats>>(new Map());
+  const [cachedStats, setCachedStats] = createSignal<Map<string, DailyStats>>(
+    new Map()
+  );
   const [quotas, setQuotas] = createSignal<QuotaSnapshot[]>([]);
   const [cursor, setCursor] = createSignal<CursorState>(createCursor());
   const [isFirstLoad, setIsFirstLoad] = createSignal(true);
   const [isFullyLoaded, setIsFullyLoaded] = createSignal(false);
   const [pageOffset, setPageOffset] = createSignal(0);
   const [internalScroll, setInternalScroll] = createSignal(0);
-  const [selectedPanel, setSelectedPanel] = createSignal<"usage" | "quota">("usage");
+  const [selectedPanel, setSelectedPanel] = createSignal<"usage" | "quota">(
+    "usage"
+  );
 
   const dimensions = useTerminalDimensions();
-  
+
   const maxVisibleDays = () => {
     const termHeight = dimensions().height;
     const headerHeight = 3;
     const statusBarHeight = 1;
     const contentHeight = termHeight - headerHeight - statusBarHeight - 2;
-    const panelHeight = sideBySide() ? contentHeight : Math.floor(contentHeight / 2);
+    const panelHeight = sideBySide()
+      ? contentHeight
+      : Math.floor(contentHeight / 2);
     const linesPerDay = 5;
     return Math.max(1, Math.floor((panelHeight - 6) / linesPerDay));
   };
@@ -400,15 +550,22 @@ function Dashboard(props: DashboardProps) {
     const storagePath = getOpenCodeStoragePath();
 
     if (isFirstLoad()) {
-      const recentMessages = await loadRecentMessages(storagePath, 24, props.providerFilter);
+      const recentMessages = await loadRecentMessages(
+        storagePath,
+        24,
+        props.providerFilter
+      );
       setAllMessages(recentMessages);
       const stats = aggregateByDate(recentMessages);
       setCachedStats(stats);
       setIsFirstLoad(false);
       setLastUpdate(new Date());
-      
+
       setTimeout(async () => {
-        const allMessages = await loadMessages(storagePath, props.providerFilter);
+        const allMessages = await loadMessages(
+          storagePath,
+          props.providerFilter
+        );
         setAllMessages(allMessages);
         const fullStats = aggregateByDate(allMessages);
         setCachedStats(fullStats);
@@ -479,16 +636,19 @@ function Dashboard(props: DashboardProps) {
   onMount(async () => {
     await Promise.all([loadQuotas(), loadData()]);
 
-    const intervalId = setInterval(async () => {
-      await Promise.all([loadQuotas(), loadData()]);
-    }, (props.refreshInterval ?? 300) * 1000);
+    const intervalId = setInterval(
+      async () => {
+        await Promise.all([loadQuotas(), loadData()]);
+      },
+      (props.refreshInterval ?? 300) * 1000
+    );
 
     return () => clearInterval(intervalId);
   });
 
   useKeyboard((key) => {
     const keyName = key.name?.toLowerCase() || key.sequence;
-    
+
     if (keyName === "t") {
       setDaysFilter(1);
       setPageOffset(0);
@@ -509,17 +669,17 @@ function Dashboard(props: DashboardProps) {
       setPageOffset(0);
       setInternalScroll(0);
     }
-    
+
     if (keyName === "tab" || keyName === "\t") {
       setSelectedPanel(selectedPanel() === "usage" ? "quota" : "usage");
     }
-    
+
     if (selectedPanel() === "usage") {
       const totalDays = cachedStats().size;
       const visibleDays = daysFilter() === 0 ? 10 : daysFilter();
       const scrollStep = visibleDays;
       const maxOffset = Math.max(0, totalDays - visibleDays);
-      
+
       if (keyName === "left" || keyName === "\x1b[d") {
         setPageOffset(Math.min(pageOffset() + scrollStep, maxOffset));
         setInternalScroll(0);
@@ -532,14 +692,16 @@ function Dashboard(props: DashboardProps) {
         setPageOffset(0);
         setInternalScroll(0);
       }
-      
+
       const allEntries = Array.from(cachedStats().entries());
-      const sortedByDateDesc = allEntries.sort((a, b) => b[0].localeCompare(a[0]));
+      const sortedByDateDesc = allEntries.sort((a, b) =>
+        b[0].localeCompare(a[0])
+      );
       const afterScrollOffset = sortedByDateDesc.slice(pageOffset());
       const requestedDays = visibleDays;
       const totalInWindow = Math.min(afterScrollOffset.length, requestedDays);
       const maxInternalScroll = Math.max(0, totalInWindow - maxVisibleDays());
-      
+
       if (keyName === "up" || keyName === "\x1b[a") {
         setInternalScroll(Math.max(internalScroll() - 1, 0));
       }
@@ -559,38 +721,26 @@ function Dashboard(props: DashboardProps) {
       background-color={COLORS.bg.primary}
     >
       <box
-        border
-        border-style="single"
-        border-color={COLORS.accent.teal}
-        height={3}
-        width="100%"
-        background-color={COLORS.bg.accent}
-        flex-direction="row"
-        align-items="center"
-        justify-content="center"
-      >
-        <text fg={COLORS.accent.teal}>
-          <b>▓▒░ OPENCODE USAGE MONITOR ░▒▓</b>
-        </text>
-      </box>
-
-      <box
         flex-grow={1}
         flex-direction={sideBySide() ? "row" : "column"}
-        gap={1}
-        padding={1}
+        gap={0}
+        padding={0}
       >
-        <UsageTable 
-          stats={displayedStats()} 
-          pageOffset={pageOffset()} 
-          daysFilter={daysFilter()} 
+        <UsageTable
+          stats={displayedStats()}
+          pageOffset={pageOffset()}
+          daysFilter={daysFilter()}
           internalScroll={internalScroll()}
           maxVisibleDays={maxVisibleDays()}
           isLoading={!isFullyLoaded()}
-          isSelected={selectedPanel() === "usage"} 
-          width={sideBySide() ? undefined : "100%"} 
+          isSelected={selectedPanel() === "usage"}
+          width={sideBySide() ? undefined : "100%"}
         />
-        <QuotaPanel quotas={quotas()} isSelected={selectedPanel() === "quota"} width={sideBySide() ? undefined : "100%"} />
+        <QuotaPanel
+          quotas={quotas()}
+          isSelected={selectedPanel() === "quota"}
+          width={sideBySide() ? undefined : "100%"}
+        />
       </box>
 
       <StatusBar daysFilter={daysFilter()} lastUpdate={lastUpdate()} />
@@ -599,16 +749,25 @@ function Dashboard(props: DashboardProps) {
 }
 
 export async function runSolidDashboard(options: DashboardProps) {
-  await render(() => (
-    <Dashboard
-      codexToken={options.codexToken}
-      providerFilter={options.providerFilter}
-      initialDays={typeof options.initialDays === "number" ? options.initialDays : 1}
-      refreshInterval={typeof options.refreshInterval === "number" ? options.refreshInterval : 300}
-    />
-  ), {
-    exitOnCtrlC: true,
-    targetFps: 30,
-    useMouse: false,
-  });
+  await render(
+    () => (
+      <Dashboard
+        codexToken={options.codexToken}
+        providerFilter={options.providerFilter}
+        initialDays={
+          typeof options.initialDays === "number" ? options.initialDays : 1
+        }
+        refreshInterval={
+          typeof options.refreshInterval === "number"
+            ? options.refreshInterval
+            : 300
+        }
+      />
+    ),
+    {
+      exitOnCtrlC: true,
+      targetFps: 30,
+      useMouse: false,
+    }
+  );
 }

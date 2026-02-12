@@ -29,7 +29,13 @@ await Bun.write(indexPath, updatedContent);
 
 console.log("Updated shebang");
 
-const tscResult = Bun.spawnSync(["tsc", "--emitDeclarationOnly", "--declaration", "--outDir", "dist"]);
+const tscResult = Bun.spawnSync([
+  "tsc",
+  "--emitDeclarationOnly",
+  "--declaration",
+  "--outDir",
+  "dist",
+]);
 if (tscResult.exitCode !== 0) {
   console.error("Type generation failed");
   process.exit(1);
