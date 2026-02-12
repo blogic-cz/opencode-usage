@@ -131,12 +131,6 @@ describe("cli", () => {
       expect(flags[0]).toBe("-D");
     });
 
-    test("recognizes codex-token flag", () => {
-      const flags = ["--codex-token", "abc123"];
-      expect(flags[0]).toBe("--codex-token");
-      expect(flags[1]).toBe("abc123");
-    });
-
     test("recognizes since flag", () => {
       const flags = ["--since", "2025-12-01"];
       expect(flags[0]).toBe("--since");

@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { loadCodexQuota } from "../codex-client.js";
+import { describe, it, expect, beforeEach, afterEach, mock } from "bun:test";
+import { loadCodexQuota, resolveCodexToken } from "../codex-client.js";
 import type { CodexUsageResponse } from "../types.js";
 
 describe("loadCodexQuota", () => {
@@ -19,16 +19,9 @@ describe("loadCodexQuota", () => {
     global.fetch = fn as typeof global.fetch;
   }
 
-  it("returns error snapshot when no token provided", async () => {
-    const result = await loadCodexQuota();
-
-    expect(result).toHaveLength(1);
-    expect(result[0]).toEqual({
-      source: "codex",
-      label: "Codex",
-      used: 0,
-      error: "No --codex-token provided",
-    });
+  it("resolveCodexToken returns explicit token over auto-read", async () => {
+    const token = await resolveCodexToken("explicit-token");
+    expect(token).toBe("explicit-token");
   });
 
   it("parses all three quota types from valid response", async () => {
@@ -114,7 +107,7 @@ describe("loadCodexQuota", () => {
       source: "codex",
       label: "Codex",
       used: 0,
-      error: "API error: 401",
+      error: "API error: 401 (token expired? Run: codex login)",
     });
   });
 

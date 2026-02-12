@@ -28,8 +28,7 @@ import {
 import { renderTable, renderJson } from "./renderer.js";
 import { runSolidDashboard } from "./dashboard-solid.js";
 import type { CursorState, MessageJson } from "./types.js";
-import { loadConfig } from "./config.js";
-import { setCodexToken, showConfig } from "./config-commands.js";
+import { showConfig } from "./config-commands.js";
 
 const WATCH_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -110,9 +109,7 @@ async function main(): Promise<void> {
     monthly,
     watch,
     dashboard,
-    codexToken,
     config,
-    configToken,
   } = parseArgs();
 
   if (config === "show") {
@@ -120,24 +117,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (config === "set-codex-token") {
-    if (!configToken) {
-      console.error("Error: --config set-codex-token requires --token <value>");
-      console.error(
-        "Usage: opencode-usage --config set-codex-token --token <token>"
-      );
-      process.exit(1);
-    }
-    await setCodexToken(configToken);
-    return;
-  }
-
-  const configData = await loadConfig();
-  const effectiveCodexToken = codexToken ?? configData.codexToken;
-
   if (dashboard) {
     await runSolidDashboard({
-      codexToken: effectiveCodexToken,
       refreshInterval: 300,
       providerFilter: provider,
       initialDays: days,

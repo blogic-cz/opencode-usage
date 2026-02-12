@@ -18,7 +18,6 @@ import { loadMultiAccountQuota, loadAntigravityQuota } from "./quota-loader.js";
 import { loadCodexQuota } from "./codex-client.js";
 
 type DashboardProps = {
-  codexToken?: string;
   providerFilter?: string;
   initialDays?: number;
   refreshInterval?: number;
@@ -616,18 +615,16 @@ function Dashboard(props: DashboardProps) {
       });
     }
 
-    if (props.codexToken) {
-      try {
-        const codex = await loadCodexQuota(props.codexToken);
-        results.push(...codex);
-      } catch (err) {
-        results.push({
-          source: "codex",
-          label: "Codex",
-          used: 0,
-          error: `Load error: ${err}`,
-        });
-      }
+    try {
+      const codex = await loadCodexQuota();
+      results.push(...codex);
+    } catch (err) {
+      results.push({
+        source: "codex",
+        label: "Codex",
+        used: 0,
+        error: `Load error: ${err}`,
+      });
     }
 
     setQuotas(results);
@@ -752,7 +749,6 @@ export async function runSolidDashboard(options: DashboardProps) {
   await render(
     () => (
       <Dashboard
-        codexToken={options.codexToken}
         providerFilter={options.providerFilter}
         initialDays={
           typeof options.initialDays === "number" ? options.initialDays : 1

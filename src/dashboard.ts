@@ -23,13 +23,12 @@ import { renderStatusBar } from "./dashboard/status-bar.js";
 import { stdin } from "node:process";
 
 export type DashboardOptions = {
-  codexToken?: string;
   refreshInterval?: number;
   providerFilter?: string;
   daysFilter?: number;
 };
 
-async function fetchAllQuotas(codexToken?: string): Promise<QuotaSnapshot[]> {
+async function fetchAllQuotas(): Promise<QuotaSnapshot[]> {
   const quotas: QuotaSnapshot[] = [];
 
   try {
@@ -56,18 +55,16 @@ async function fetchAllQuotas(codexToken?: string): Promise<QuotaSnapshot[]> {
     });
   }
 
-  if (codexToken) {
-    try {
-      const codex = await loadCodexQuota(codexToken);
-      quotas.push(...codex);
-    } catch (err) {
-      quotas.push({
-        source: "codex",
-        label: "Codex",
-        used: 0,
-        error: `Load error: ${err}`,
-      });
-    }
+  try {
+    const codex = await loadCodexQuota();
+    quotas.push(...codex);
+  } catch (err) {
+    quotas.push({
+      source: "codex",
+      label: "Codex",
+      used: 0,
+      error: `Load error: ${err}`,
+    });
   }
 
   return quotas;
@@ -147,7 +144,7 @@ export async function runDashboard(options: DashboardOptions): Promise<void> {
       dailyStats = filterByDays(cachedAggregatedStats, currentDaysFilter);
     }
 
-    const quotas = await fetchAllQuotas(options.codexToken);
+    const quotas = await fetchAllQuotas();
 
     const responsiveBreakpoint = 168;
     const sideBySide = width >= responsiveBreakpoint;

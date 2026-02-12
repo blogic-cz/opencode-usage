@@ -13,9 +13,7 @@ export type CliArgs = {
   monthly?: boolean;
   watch?: boolean;
   dashboard?: boolean;
-  codexToken?: string;
-  config?: "set-codex-token" | "show";
-  configToken?: string;
+  config?: "show";
 };
 
 // Get CLI args - works with both Bun and Node.js
@@ -73,9 +71,7 @@ export function parseArgs(): CliArgs {
         monthly: { type: "boolean", short: "m" },
         watch: { type: "boolean", short: "w" },
         dashboard: { type: "boolean", short: "D" },
-        "codex-token": { type: "string" },
         config: { type: "string" },
-        token: { type: "string" },
         help: { type: "boolean", short: "h" },
       },
       strict: true,
@@ -95,9 +91,7 @@ export function parseArgs(): CliArgs {
       monthly: values.monthly,
       watch: values.watch,
       dashboard: values.dashboard,
-      codexToken: values["codex-token"],
-      config: values.config as "set-codex-token" | "show" | undefined,
-      configToken: values.token,
+      config: values.config as "show" | undefined,
     };
   } catch (error) {
     if (error instanceof Error && error.message.includes("Unknown option")) {
@@ -125,13 +119,12 @@ Options:
   -m, --monthly           Aggregate by month instead of day
   -w, --watch             Watch mode - refresh every 5 minutes
   -D, --dashboard         Dashboard mode - unified multi-source view (Bun only)
-      --codex-token <t>   Codex API token for quota display in dashboard
-      --config <cmd>      Config commands: set-codex-token, show
+      --config show       Show current configuration
   -h, --help              Show this help message
 
-Config Commands:
-  --config show                           Show current configuration
-  --config set-codex-token --token <tok>  Save Codex API token to config
+Codex Quota:
+  Dashboard auto-reads Codex auth from ~/.codex/auth.json.
+  Run 'codex login' to authenticate.
 
 Examples:
   bunx opencode-usage
@@ -143,15 +136,6 @@ Examples:
   bunx opencode-usage --watch
   bunx opencode-usage -w -d 1
   bunx opencode-usage --dashboard
-  bunx opencode-usage --dashboard --codex-token <token>
   bunx opencode-usage --config show
-  bunx opencode-usage --config set-codex-token --token sk-...
-
-How to get Codex token:
-  1. Open chatgpt.com in browser
-  2. Open DevTools (F12 or Cmd+Option+I)
-  3. Go to Network tab and reload page
-  4. Find request to 'backend-api/wham/usage'
-  5. Copy 'Authorization' header value (starts with 'Bearer ')
 `);
 }

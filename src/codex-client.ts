@@ -1,19 +1,67 @@
+import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { QuotaSnapshot, CodexUsageResponse } from "./types.js";
 
+const isBun = typeof globalThis.Bun !== "undefined";
+
 const CODEX_API_URL = "https://chatgpt.com/backend-api/wham/usage";
+const CODEX_AUTH_PATH = join(homedir(), ".codex", "auth.json");
+
+type CodexAuthFile = {
+  OPENAI_API_KEY?: string | null;
+  tokens?: {
+    access_token?: string;
+    refresh_token?: string;
+    id_token?: string;
+  };
+  last_refresh?: string;
+};
 
 /**
- * Fetch Codex usage quota from ChatGPT API
- * Requires a valid session token passed via --codex-token
+ * Read access token from ~/.codex/auth.json (created by `codex login`)
+ */
+async function readCodexAuthToken(): Promise<string | undefined> {
+  try {
+    const content = isBun
+      ? await Bun.file(CODEX_AUTH_PATH).text()
+      : await readFile(CODEX_AUTH_PATH, "utf-8");
+    const auth = JSON.parse(content) as CodexAuthFile;
+
+    // Prefer OPENAI_API_KEY if set, otherwise use OAuth access_token
+    if (auth.OPENAI_API_KEY) {
+      return auth.OPENAI_API_KEY;
+    }
+    return auth.tokens?.access_token ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Resolve Codex token: explicit override > ~/.codex/auth.json auto-read
+ */
+export async function resolveCodexToken(
+  explicitToken?: string
+): Promise<string | undefined> {
+  if (explicitToken) return explicitToken;
+  return readCodexAuthToken();
+}
+
+/**
+ * Fetch Codex usage quota from ChatGPT API.
+ * Auto-reads token from ~/.codex/auth.json if not provided explicitly.
  */
 export async function loadCodexQuota(token?: string): Promise<QuotaSnapshot[]> {
-  if (!token) {
+  const resolvedToken = await resolveCodexToken(token);
+
+  if (!resolvedToken) {
     return [
       {
         source: "codex",
         label: "Codex",
         used: 0,
-        error: "No --codex-token provided",
+        error: "Not logged in. Run: codex login",
       },
     ];
   }
@@ -22,18 +70,22 @@ export async function loadCodexQuota(token?: string): Promise<QuotaSnapshot[]> {
     const response = await fetch(CODEX_API_URL, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${resolvedToken}`,
         "Content-Type": "application/json",
       },
     });
 
     if (!response.ok) {
+      const hint =
+        response.status === 401
+          ? " (token expired? Run: codex login)"
+          : "";
       return [
         {
           source: "codex",
           label: "Codex",
           used: 0,
-          error: `API error: ${response.status}`,
+          error: `API error: ${response.status}${hint}`,
         },
       ];
     }

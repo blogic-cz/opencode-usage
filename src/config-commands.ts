@@ -1,31 +1,25 @@
-/**
- * Config management commands
- */
+import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { getConfigPath } from "./config.js";
 
-import { loadConfig, saveConfig, getConfigPath } from "./config.js";
-
-export async function setCodexToken(token: string): Promise<void> {
-  const config = await loadConfig();
-  config.codexToken = token;
-  await saveConfig(config);
-  console.log(`✓ Codex token saved to ${getConfigPath()}`);
-}
+const CODEX_AUTH_PATH = join(homedir(), ".codex", "auth.json");
 
 export async function showConfig(): Promise<void> {
-  const config = await loadConfig();
   const configPath = getConfigPath();
+  console.log(`\nConfiguration file: ${configPath}`);
 
-  console.log(`\nConfiguration file: ${configPath}\n`);
-
-  if (config.codexToken) {
-    const maskedToken =
-      config.codexToken.substring(0, 8) +
-      "..." +
-      config.codexToken.substring(config.codexToken.length - 4);
-    console.log(`  codexToken: ${maskedToken}`);
-  } else {
-    console.log(`  codexToken: (not set)`);
+  let hasCodexAuth = false;
+  try {
+    const content = await readFile(CODEX_AUTH_PATH, "utf-8");
+    const auth = JSON.parse(content) as { tokens?: { access_token?: string } };
+    hasCodexAuth = !!auth.tokens?.access_token;
+  } catch {
+    // expected when ~/.codex/auth.json doesn't exist
   }
 
+  console.log(
+    `  Codex auth: ${hasCodexAuth ? "~/.codex/auth.json (auto)" : "(not found — run: codex login)"}`
+  );
   console.log();
 }
