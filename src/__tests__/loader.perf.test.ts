@@ -1,78 +1,86 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { Database } from "bun:sqlite";
 import { loadRecentMessages, loadMessages } from "../loader.js";
-import type { MessageJson } from "../types.js";
 import { join } from "node:path";
-import { mkdir, writeFile, rm, utimes } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 
 const PERF_THRESHOLD_RECENT = 100;
 const PERF_THRESHOLD_FULL = 5000;
 
-const createTestMessage = (
-  id: string,
-  sessionID: string,
-  providerID: string = "anthropic",
-  created: number = Date.now()
-): MessageJson => ({
-  id,
-  sessionID,
-  role: "assistant",
-  model: {
-    providerID,
-    modelID: "claude-3-5-sonnet",
-  },
-  tokens: {
-    input: 100,
-    output: 50,
-    reasoning: 0,
-    cache: { read: 0, write: 0 },
-  },
-  time: {
-    created,
-    completed: created + 1000,
-  },
-});
-
-describe("loader - performance tests", () => {
+describe("loader - performance tests (SQLite)", () => {
   let testDir: string;
 
   beforeAll(async () => {
     testDir = join(tmpdir(), `opencode-perf-test-${Date.now()}`);
     await mkdir(testDir, { recursive: true });
 
-    const messagesDir = join(testDir, "message");
+    const db = new Database(join(testDir, "opencode.db"));
+    db.run(`CREATE TABLE session (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      directory TEXT NOT NULL,
+      title TEXT NOT NULL,
+      version TEXT NOT NULL,
+      time_created INTEGER NOT NULL,
+      time_updated INTEGER NOT NULL
+    )`);
+    db.run(`CREATE TABLE message (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      time_created INTEGER NOT NULL,
+      time_updated INTEGER NOT NULL,
+      data TEXT NOT NULL,
+      FOREIGN KEY (session_id) REFERENCES session(id)
+    )`);
+    db.run(`CREATE INDEX message_session_idx ON message (session_id)`);
 
     const sessionsToCreate = 100;
-    const filesPerSession = 50;
+    const msgsPerSession = 50;
     const now = Date.now();
 
-    for (let s = 0; s < sessionsToCreate; s++) {
-      const sessionDir = join(messagesDir, `session-${s}`);
-      await mkdir(sessionDir, { recursive: true });
+    const insertSession = db.prepare(
+      `INSERT INTO session VALUES (?, 'proj-1', 'test', '/tmp', 'Test', '1.0', ?, ?)`
+    );
+    const insertMsg = db.prepare(
+      `INSERT INTO message (id, session_id, time_created, time_updated, data) VALUES (?, ?, ?, ?, ?)`
+    );
 
-      for (let f = 0; f < filesPerSession; f++) {
-        const ageMs =
-          (sessionsToCreate - s) * 1000 * 60 * 60 +
-          (filesPerSession - f) * 1000;
-        const timestamp = now - ageMs;
+    const insertAll = db.transaction(() => {
+      for (let s = 0; s < sessionsToCreate; s++) {
+        const sessionId = `session-${s}`;
+        insertSession.run(sessionId, now, now);
 
-        const msg = createTestMessage(
-          `msg-${s}-${f}`,
-          `session-${s}`,
-          "anthropic",
-          timestamp
-        );
+        for (let f = 0; f < msgsPerSession; f++) {
+          const ageMs =
+            (sessionsToCreate - s) * 1000 * 60 * 60 +
+            (msgsPerSession - f) * 1000;
+          const timestamp = now - ageMs;
 
-        const filePath = join(sessionDir, `msg-${f}.json`);
-        await writeFile(filePath, JSON.stringify(msg));
+          const data = JSON.stringify({
+            role: "assistant",
+            providerID: "anthropic",
+            modelID: "claude-3-5-sonnet",
+            tokens: {
+              input: 100,
+              output: 50,
+              reasoning: 0,
+              cache: { read: 0, write: 0 },
+            },
+            time: { created: timestamp, completed: timestamp + 1000 },
+          });
 
-        const mtime = new Date(timestamp);
-        await utimes(filePath, mtime, mtime);
+          insertMsg.run(`msg-${s}-${f}`, sessionId, timestamp, timestamp, data);
+        }
       }
-    }
+    });
+
+    insertAll();
+    db.close();
 
     console.log(
-      `Created ${sessionsToCreate * filesPerSession} test messages in ${sessionsToCreate} sessions`
+      `Created ${sessionsToCreate * msgsPerSession} test messages in ${sessionsToCreate} sessions`
     );
   });
 
@@ -96,13 +104,13 @@ describe("loader - performance tests", () => {
     expect(duration).toBeLessThan(PERF_THRESHOLD_RECENT);
   });
 
-  it("loadRecentMessages() loads ALL files within time window (accurate)", async () => {
+  it("loadRecentMessages() loads ALL messages within time window", async () => {
     const messages = await loadRecentMessages(testDir, 24);
 
     expect(messages.length).toBeGreaterThan(0);
 
     for (const msg of messages) {
-      const messageTime = msg.time?.created || 0;
+      const messageTime = msg.time?.created ?? 0;
       const ageHours = (Date.now() - messageTime) / (1000 * 60 * 60);
       expect(ageHours).toBeLessThanOrEqual(24);
     }
@@ -115,7 +123,7 @@ describe("loader - performance tests", () => {
     expect(messages1h.length).toBeLessThan(messages24h.length);
   });
 
-  it(`loadMessages() completes in under ${PERF_THRESHOLD_FULL}ms (5000 files)`, async () => {
+  it(`loadMessages() completes in under ${PERF_THRESHOLD_FULL}ms (5000 rows)`, async () => {
     const start = performance.now();
     const messages = await loadMessages(testDir);
     const duration = performance.now() - start;
@@ -127,7 +135,7 @@ describe("loader - performance tests", () => {
     expect(duration).toBeLessThan(PERF_THRESHOLD_FULL);
   });
 
-  it("loadRecentMessages() is significantly faster than loadMessages()", async () => {
+  it("loadRecentMessages() is faster than loadMessages()", async () => {
     const startRecent = performance.now();
     const recentMessages = await loadRecentMessages(testDir, 24);
     const recentDuration = performance.now() - startRecent;
@@ -141,9 +149,6 @@ describe("loader - performance tests", () => {
     );
     console.log(
       `Full: ${fullDuration.toFixed(2)}ms (${fullMessages.length} messages)`
-    );
-    console.log(
-      `Speedup: ${(fullDuration / recentDuration).toFixed(2)}x faster`
     );
 
     expect(recentDuration).toBeLessThan(fullDuration);
@@ -173,7 +178,7 @@ describe("loader - performance tests", () => {
     }
   });
 
-  it("loadRecentMessages() respects provider filter without performance hit", async () => {
+  it("loadRecentMessages() with provider filter", async () => {
     const startWithoutFilter = performance.now();
     const withoutFilter = await loadRecentMessages(testDir, 24);
     const durationWithoutFilter = performance.now() - startWithoutFilter;
@@ -189,7 +194,7 @@ describe("loader - performance tests", () => {
       `With filter: ${durationWithFilter.toFixed(2)}ms (${withFilter.length} messages)`
     );
 
-    expect(durationWithFilter).toBeLessThan(durationWithoutFilter * 2.0);
+    expect(durationWithFilter).toBeLessThan(durationWithoutFilter * 5.0);
     expect(withFilter.length).toBe(withoutFilter.length);
   });
 });

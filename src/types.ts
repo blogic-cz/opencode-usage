@@ -73,10 +73,8 @@ export type QuotaSnapshot = {
   error?: string; // Error message if unavailable
 };
 
-/** Cursor state for incremental message loading */
+/** Cursor state for incremental message loading (SQLite-backed) */
 export type CursorState = {
-  knownSessions: Set<string>;
-  fileCountPerSession: Map<string, number>;
   lastTimestamp: number;
 };
 
